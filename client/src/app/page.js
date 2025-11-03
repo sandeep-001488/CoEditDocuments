@@ -61,7 +61,7 @@ export default function HomePage() {
             maxW="2xl"
           >
             The smart collaborative document editor powered by AI. Write better,
-            work together and achieve more..
+            see together and achieve more.
           </Text>
           <HStack spacing={4}>
             <Button
