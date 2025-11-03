@@ -61,7 +61,7 @@ export default function HomePage() {
             maxW="2xl"
           >
             The smart collaborative document editor powered by AI. Write better,
-            see together and achieve more.
+            work together and achieve more.
           </Text>
           <HStack spacing={4}>
             <Button
@@ -127,8 +127,7 @@ export default function HomePage() {
               Ready to transform your writing?
             </Heading>
             <Text fontSize="lg" color="purple.100" maxW="2xl">
-              Join thousands of writers using CoEdit to create amazing
-              documents
+              Join thousands of writers using CoEdit to create amazing documents
             </Text>
             <Button
               size="lg"
