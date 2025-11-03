@@ -5,7 +5,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "CollabWrite AI - Collaborative Writing Platform",
+  title: "CoEdit - Collaborative Writing Platform",
   description: "Real-time collaborative document editing with AI assistance",
 };
 

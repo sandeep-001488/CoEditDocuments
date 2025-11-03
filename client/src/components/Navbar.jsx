@@ -34,7 +34,7 @@ export default function Navbar() {
         <HStack spacing={8} alignItems="center">
           <NextLink href={user ? "/dashboard" : "/"} passHref>
             <Text fontSize="2xl" fontWeight="bold" color="brand.500">
-              CollabWrite AI
+              CoEdit
             </Text>
           </NextLink>
         </HStack>

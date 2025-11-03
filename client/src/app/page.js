@@ -53,7 +53,7 @@ export default function HomePage() {
             bgClip="text"
             fontWeight="extrabold"
           >
-            CollabWrite AI
+            CoEdit
           </Heading>
           <Text
             fontSize={{ base: "xl", md: "2xl" }}
@@ -127,7 +127,7 @@ export default function HomePage() {
               Ready to transform your writing?
             </Heading>
             <Text fontSize="lg" color="purple.100" maxW="2xl">
-              Join thousands of writers using CollabWrite AI to create amazing
+              Join thousands of writers using CoEdit to create amazing
               documents
             </Text>
             <Button

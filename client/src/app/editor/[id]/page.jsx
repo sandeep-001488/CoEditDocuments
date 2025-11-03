@@ -66,9 +66,11 @@ export default function EditorPage() {
   const [userRole, setUserRole] = useState(null);
   const [joinedViaLink, setJoinedViaLink] = useState(false);
   const [images, setImages] = useState([]);
+  const [waitingForOwner, setWaitingForOwner] = useState(false);
   const autoSaveTimer = useRef(null);
   const typingTimer = useRef(null);
   const titleSaveTimer = useRef(null);
+  const waitingToastId = useRef(null); // NEW: Track toast ID
 
   useEffect(() => {
     if (!content && !title) return;
@@ -96,7 +98,6 @@ export default function EditorPage() {
       return;
     }
 
-    // Check if joined via link
     const linkToken = searchParams.get("token");
     const permission = searchParams.get("permission");
     if (linkToken) {
@@ -130,15 +131,92 @@ export default function EditorPage() {
       setTitle(data.title || "");
       setLastSaved(new Date(data.updatedAt));
       setIsOwner(data.isOwner);
+      setImages(data.images || []);
+      setWaitingForOwner(false);
+      setLoading(false);
 
-      // Set role from socket or from URL params
+      // UPDATED: Close waiting toast when document loads
+      if (waitingToastId.current) {
+        toast.close(waitingToastId.current);
+        waitingToastId.current = null;
+      }
+
       if (linkToken && permission) {
         setUserRole(permission);
       } else {
         setUserRole(data.userRole);
       }
+    });
 
-      setLoading(false);
+    // UPDATED: Handle owner offline - show toast only once
+    socketInstance.on("owner-offline", (data) => {
+      console.log("⏳ Owner is offline, waiting...");
+      setWaitingForOwner(true);
+
+      // Close any existing waiting toast first
+      if (waitingToastId.current) {
+        toast.close(waitingToastId.current);
+      }
+
+      // Show single persistent toast
+      waitingToastId.current = toast({
+        title: "Waiting for owner",
+        description: data.message,
+        status: "info",
+        duration: null, // Keep it open until manually closed
+        isClosable: false,
+      });
+    });
+
+    // UPDATED: Handle owner coming online
+    socketInstance.on("owner-online", (data) => {
+      console.log("✅ Owner is now online, reconnecting...");
+
+      // Close waiting toast
+      if (waitingToastId.current) {
+        toast.close(waitingToastId.current);
+        waitingToastId.current = null;
+      }
+
+      // Show success toast
+      toast({
+        title: "Owner is online",
+        description: "Connecting to document...",
+        status: "success",
+        duration: 2000,
+      });
+
+      // Retry joining
+      setTimeout(() => {
+        socketInstance.emit("join-document", {
+          documentId: params.id,
+          token,
+        });
+      }, 500);
+    });
+
+    socketInstance.on("image-added", (imageData) => {
+      console.log("🖼️ New image added:", imageData);
+      setImages((prev) => [...prev, imageData]);
+
+      toast({
+        title: "Image added",
+        description: `${imageData.uploadedBy.name} added an image`,
+        status: "info",
+        duration: 3000,
+      });
+    });
+
+    socketInstance.on("image-removed", ({ imageId }) => {
+      console.log("🗑️ Image removed:", imageId);
+      setImages((prev) => prev.filter((img) => img._id !== imageId));
+
+      toast({
+        title: "Image removed",
+        description: "Owner removed an image",
+        status: "info",
+        duration: 2000,
+      });
     });
 
     socketInstance.on("text-change", (data) => {
@@ -209,6 +287,10 @@ export default function EditorPage() {
     });
 
     return () => {
+      // UPDATED: Close waiting toast on cleanup
+      if (waitingToastId.current) {
+        toast.close(waitingToastId.current);
+      }
       disconnectSocket(params.id);
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
       if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -291,7 +373,6 @@ export default function EditorPage() {
     setTitle(newTitle);
     emitTypingIndicator();
 
-    // Auto-save title with debounce
     if (titleSaveTimer.current) {
       clearTimeout(titleSaveTimer.current);
     }
@@ -320,11 +401,37 @@ export default function EditorPage() {
   };
 
   const handleImageUpload = (imageData) => {
-    setImages((prev) => [...prev, imageData]);
+    if (!socket || !isConnected) {
+      toast({
+        title: "Not connected",
+        description: "Please wait for connection",
+        status: "warning",
+        duration: 3000,
+      });
+      return;
+    }
+
+    socket.emit("image-upload", {
+      documentId: params.id,
+      imageData,
+    });
   };
 
-  const handleRemoveImage = (index) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveImage = (imageId) => {
+    if (!socket || !isConnected) {
+      toast({
+        title: "Not connected",
+        description: "Please wait for connection",
+        status: "warning",
+        duration: 3000,
+      });
+      return;
+    }
+
+    socket.emit("image-remove", {
+      documentId: params.id,
+      imageId,
+    });
   };
 
   const emitTypingIndicator = () => {
@@ -385,12 +492,22 @@ export default function EditorPage() {
     return "blue";
   };
 
-  if (loading) {
+  // UPDATED: Simplified waiting screen without attempt counter
+  if (loading || waitingForOwner) {
     return (
       <Center minH="100vh" bgGradient={bgGradient}>
         <VStack spacing={4}>
           <Spinner size="xl" color="purple.500" thickness="4px" />
-          <Text color="gray.600">Loading document...</Text>
+          <Text color="gray.600" fontSize="lg" fontWeight="medium">
+            {waitingForOwner
+              ? "Waiting for document owner to come online..."
+              : "Loading document..."}
+          </Text>
+          {waitingForOwner && (
+            <Text color="gray.500" fontSize="sm">
+              Please wait while we connect you to the document
+            </Text>
+          )}
         </VStack>
       </Center>
     );

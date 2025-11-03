@@ -159,7 +159,7 @@ export default function DashboardPage() {
               bgClip="text"
               fontWeight="extrabold"
             >
-              CollabWrite AI
+              CoEdit
             </Heading>
             <HStack spacing={{ base: 2, md: 4 }}>
               <Button

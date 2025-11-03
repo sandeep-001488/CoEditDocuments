@@ -1,4 +1,4 @@
-# 📝 CollabWrite AI - Collaborative Writing Platform
+# 📝 CoEdit - Collaborative Writing Platform
 
 A full-stack real-time collaborative document editor with AI-powered writing assistance, built with Next.js 14, Express.js, MongoDB, and Google Gemini AI.
 
@@ -16,6 +16,7 @@ A full-stack real-time collaborative document editor with AI-powered writing ass
 ## 🛠️ Tech Stack
 
 ### Frontend
+
 - **Next.js 14** (App Router)
 - **Chakra UI** - Modern component library
 - **React Quill** - Rich text editor
@@ -23,6 +24,7 @@ A full-stack real-time collaborative document editor with AI-powered writing ass
 - **Axios** - API requests
 
 ### Backend
+
 - **Node.js & Express.js** - Server framework
 - **MongoDB & Mongoose** - Database
 - **Socket.io** - WebSocket server
@@ -67,18 +69,21 @@ collabwrite-ai/
 ### Installation
 
 1. **Clone the repository**
+
 ```bash
 git clone <your-repo-url>
 cd collabwrite-ai
 ```
 
 2. **Setup Backend**
+
 ```bash
 cd server
 npm install
 ```
 
 Create `.env` file in `server/` directory:
+
 ```env
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/collabwrite
@@ -89,51 +94,59 @@ NODE_ENV=development
 ```
 
 3. **Setup Frontend**
+
 ```bash
 cd ../client
 npm install
 ```
 
 Create `.env.local` file in `client/` directory:
+
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 ```
 
 4. **Start MongoDB**
+
 ```bash
 # If using local MongoDB
 mongod
 ```
 
 5. **Start Backend Server**
+
 ```bash
 cd server
 npm run dev
 ```
 
 6. **Start Frontend**
+
 ```bash
 cd client
 npm run dev
 ```
 
 7. **Open your browser**
-Navigate to `http://localhost:3000`
+   Navigate to `http://localhost:3000`
 
 ## 📖 Usage
 
 ### Creating an Account
+
 1. Click "Start Writing Free" on the landing page
 2. Fill in your name, email, and password
 3. Click "Create Account"
 
 ### Creating a Document
+
 1. After login, you'll see the dashboard
 2. Click "New Document" button
 3. Start writing!
 
 ### Using AI Assistant
+
 1. Write some text in the editor
 2. Click on any AI feature in the right sidebar:
    - **Grammar Check** - Fix grammar and spelling
@@ -145,6 +158,7 @@ Navigate to `http://localhost:3000`
 4. Click "Apply to Document" to use it
 
 ### Collaborating
+
 1. Open a document
 2. Click the share button
 3. Enter collaborator's email
@@ -154,12 +168,14 @@ Navigate to `http://localhost:3000`
 ## 🔧 API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
 - `GET /api/auth/me` - Get current user
 - `POST /api/auth/logout` - Logout user
 
 ### Documents
+
 - `POST /api/documents` - Create document
 - `GET /api/documents` - Get all user documents
 - `GET /api/documents/:id` - Get single document
@@ -169,6 +185,7 @@ Navigate to `http://localhost:3000`
 - `POST /api/documents/:id/share-link` - Generate share link
 
 ### AI Features
+
 - `POST /api/ai/grammar-check` - Check grammar
 - `POST /api/ai/enhance` - Enhance writing
 - `POST /api/ai/summarize` - Summarize text
