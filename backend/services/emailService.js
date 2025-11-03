@@ -1,134 +1,3 @@
-// import nodemailer from "nodemailer";
-// import logger from "../utils/logger.js";
-
-
-
-// const createTransporter = () => {
-//   return nodemailer.createTransport({
-//     service: "gmail",
-//     auth: {
-//       user: process.env.EMAIL_USER,
-//       pass: process.env.EMAIL_PASSWORD, 
-//     },
-//   });
-// };
-// export const sendShareInvitation = async (
-//   ownerEmail,
-//   ownerName,
-//   recipientEmail,
-//   documentTitle,
-//   shareLink,
-//   permission
-// ) => {
-//   try {
-//     const transporter = createTransporter();
-//     const permissionText =
-//       permission === "editor" ? "edit this document" : "view this document";
-
-//     const mailOptions = {
-//       from: `"${ownerName}" <${process.env.EMAIL_USER}>`,
-//       to: recipientEmail,
-//       subject: `${ownerName} shared "${documentTitle}" with you`,
-//       html: `
-//         <!DOCTYPE html>
-//         <html>
-//         <head>
-//           <style>
-//             body {
-//               font-family: Arial, sans-serif;
-//               line-height: 1.6;
-//               color: #333;
-//             }
-//             .container {
-//               max-width: 600px;
-//               margin: 0 auto;
-//               padding: 20px;
-//               background-color: #f9f9f9;
-//             }
-//             .header {
-//               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-//               color: white;
-//               padding: 30px;
-//               text-align: center;
-//               border-radius: 10px 10px 0 0;
-//             }
-//             .content {
-//               background: white;
-//               padding: 30px;
-//               border-radius: 0 0 10px 10px;
-//             }
-//             .button {
-//               display: inline-block;
-//               padding: 12px 30px;
-//               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-//               color: white;
-//               text-decoration: none;
-//               border-radius: 5px;
-//               margin: 20px 0;
-//               font-weight: bold;
-//             }
-//             .footer {
-//               text-align: center;
-//               margin-top: 20px;
-//               color: #666;
-//               font-size: 12px;
-//             }
-//             .info-box {
-//               background: #f0f0f0;
-//               padding: 15px;
-//               border-left: 4px solid #667eea;
-//               margin: 20px 0;
-//             }
-//           </style>
-//         </head>
-//         <body>
-//           <div class="container">
-//             <div class="header">
-//               <h1>📄 CollabWrite AI</h1>
-//               <p>Collaborative Document Sharing</p>
-//             </div>
-//             <div class="content">
-//               <h2>Hello! 👋</h2>
-//               <p><strong>${ownerName}</strong> has invited you to collaborate on a document.</p>
-              
-//               <div class="info-box">
-//                 <p><strong>Document:</strong> ${documentTitle}</p>
-//                 <p><strong>Permission:</strong> You can ${permissionText}</p>
-//                 <p><strong>Shared by:</strong> ${ownerName} (${ownerEmail})</p>
-//               </div>
-
-//               <p>Click the button below to access the document:</p>
-              
-//               <center>
-//                 <a href="${shareLink}" class="button">Open Document</a>
-//               </center>
-
-//               <p>Or copy this link: <br><code>${shareLink}</code></p>
-
-//               <p style="margin-top: 30px;">
-//                 If you didn't expect this invitation, you can safely ignore this email.
-//               </p>
-//             </div>
-//             <div class="footer">
-//               <p>CollabWrite AI - Real-time Collaborative Writing Platform</p>
-//               <p>This is an automated email, please do not reply.</p>
-//             </div>
-//           </div>
-//         </body>
-//         </html>
-//       `,
-//     };
-
-//     const info = await transporter.sendMail(mailOptions);
-//     logger.success(`Email sent: ${info.messageId}`);
-//     return { success: true, messageId: info.messageId };
-//   } catch (error) {
-//     logger.error("Email sending error:", error);
-//     throw new Error("Failed to send invitation email");
-//   }
-// };
-
-// export default { sendShareInvitation };
 import nodemailer from "nodemailer";
 import logger from "../utils/logger.js";
 
@@ -144,25 +13,20 @@ const createTransporter = () => {
   try {
     const transporter = nodemailer.createTransport({
       service: "gmail",
-      host: "smtp.gmail.com", // Explicit host
-      port: 587, // Explicit port
-      secure: false, // Use TLS
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD, // This should be an App Password, not your regular password
+        pass: process.env.EMAIL_PASSWORD,
       },
       tls: {
-        rejectUnauthorized: false, // For production, you might want to set this to true
+        rejectUnauthorized: false,
       },
-    });
-
-    // Verify transporter configuration
-    transporter.verify((error, success) => {
-      if (error) {
-        logger.error("Email transporter verification failed:", error);
-      } else {
-        logger.success("Email server is ready to send messages");
-      }
+      // Add timeout settings for production
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
 
     return transporter;
@@ -199,7 +63,7 @@ export const sendShareInvitation = async (
     const mailOptions = {
       from: `"${ownerName}" <${process.env.EMAIL_USER}>`,
       to: recipientEmail,
-      replyTo: ownerEmail, // Allow recipient to reply to owner
+      replyTo: ownerEmail,
       subject: `${ownerName} shared "${documentTitle}" with you`,
       html: `
         <!DOCTYPE html>
@@ -303,7 +167,6 @@ export const sendShareInvitation = async (
         </body>
         </html>
       `,
-      // Plain text alternative
       text: `
 Hello!
 
@@ -347,9 +210,9 @@ Questions? Contact ${ownerEmail}
         "2. EMAIL_PASSWORD is an App Password (not regular password)"
       );
       logger.error("3. 2-Step Verification is enabled in Gmail");
-    } else if (error.code === "ESOCKET") {
+    } else if (error.code === "ESOCKET" || error.code === "ETIMEDOUT") {
       logger.error(
-        "Network error. Check your internet connection and firewall settings"
+        "Network/timeout error. Check your internet connection and firewall settings"
       );
     } else if (error.code === "EENVELOPE") {
       logger.error("Invalid email addresses provided");
