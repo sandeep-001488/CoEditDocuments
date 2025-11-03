@@ -55,11 +55,11 @@ bashcd backend
 npm install
 Create a .env file in the backend directory:
 env# Database
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/coedit
+MONGODB_URI=Your database URL
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key
-JWT_EXPIRE=7d
+JWT_EXPIRE=time
 
 # Server
 PORT=4000
