@@ -74,7 +74,7 @@ export default function HomePage() {
               }}
               transition="all 0.2s"
             >
-              Get Started For Free
+              Start For Free 
             </Button>
             <Button
               size="lg"
