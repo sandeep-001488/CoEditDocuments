@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import logger from "../utils/logger.js";
 
 
-// Create reusable transporter
+
 const createTransporter = () => {
   return nodemailer.createTransport({
     service: "gmail",
