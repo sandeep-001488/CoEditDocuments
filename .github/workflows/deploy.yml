@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: SSH to EC2 and deploy
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -24,4 +24,3 @@ jobs:
             git reset --hard
             git pull origin main
             sudo docker-compose -f docker-compose.prod.yml up -d --build
-            sudo docker system prune -f
