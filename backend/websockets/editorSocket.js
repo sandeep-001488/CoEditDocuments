@@ -6,6 +6,7 @@ import logger from "../utils/logger.js";
 const activeUsers = new Map();
 const activeOwners = new Map();
 const joinNotificationsSent = new Map();
+const waitingUsers = new Map();
 
 export const initializeSocket = (io) => {
   io.on("connection", (socket) => {
@@ -21,7 +22,8 @@ export const initializeSocket = (io) => {
 
         const document = await Document.findById(documentId)
           .populate("owner", "name email avatar")
-          .populate("collaborators.user", "name email avatar");
+          .populate("collaborators.user", "name email avatar")
+          .populate("images.uploadedBy", "name email avatar");
 
         if (!document) {
           socket.emit("error", { message: "Document not found" });
@@ -33,19 +35,16 @@ export const initializeSocket = (io) => {
         const ownerId = document.owner._id.toString();
         const isOwner = userId === ownerId;
 
-        // Find collaborator role
         const collaborator = document.collaborators.find(
           (c) => c.user._id.toString() === userId
         );
 
-        // Determine user role - FIXED: use collaborator.role directly
         let userRole;
         if (isOwner) {
           userRole = "owner";
         } else if (collaborator) {
-          userRole = collaborator.role; // This will be "editor" or "viewer"
+          userRole = collaborator.role;
         } else if (document.isPublic) {
-          // If document is public (shared via link), check sharePermission
           userRole = document.sharePermission || "viewer";
         } else {
           userRole = null;
@@ -58,6 +57,7 @@ export const initializeSocket = (io) => {
           return;
         }
 
+        // Handle owner coming online
         if (isOwner) {
           activeOwners.set(documentId, {
             socketId: socket.id,
@@ -68,18 +68,44 @@ export const initializeSocket = (io) => {
           logger.success(
             `✅ Owner ${user.name} marked online for document ${documentId}`
           );
+
+          // Notify waiting users that owner is online
+          if (waitingUsers.has(documentId)) {
+            const waiting = waitingUsers.get(documentId);
+            waiting.forEach((waitingSocketId) => {
+              const waitingSocket = io.sockets.sockets.get(waitingSocketId);
+              if (waitingSocket) {
+                logger.info(
+                  `📢 Notifying waiting user ${waitingSocketId} that owner is online`
+                );
+                waitingSocket.emit("owner-online", { documentId });
+              }
+            });
+            waitingUsers.delete(documentId);
+          }
         }
 
+        // UPDATED: If non-owner and owner not online, keep them waiting
         if (!isOwner) {
           const ownerOnline = activeOwners.get(documentId);
           if (!ownerOnline) {
             logger.warn(
               `❌ Non-owner ${user.name} tried to join but owner not online`
             );
-            socket.emit("error", {
-              message: "Document owner is not online. Please try again later.",
+
+            // Add to waiting list
+            if (!waitingUsers.has(documentId)) {
+              waitingUsers.set(documentId, new Set());
+            }
+            waitingUsers.get(documentId).add(socket.id);
+            socket.waitingForDocument = documentId;
+
+            // UPDATED: Send single notification, client will handle display
+            socket.emit("owner-offline", {
+              message:
+                "Document owner is not online. Waiting for owner to connect...",
             });
-            return;
+            return; // Don't proceed with join
           }
         }
 
@@ -116,11 +142,22 @@ export const initializeSocket = (io) => {
           socketId: socket.id,
           color: getRandomColor(userId),
           isOwner: isOwner,
-          role: userRole, // This will now be correct: "owner", "editor", or "viewer"
+          role: userRole,
           joinedAt: Date.now(),
         };
 
         activeUsers.get(documentId).set(socket.id, userData);
+
+        const images = document.images.map((img) => ({
+          url: img.url,
+          name: img.name,
+          uploadedBy: {
+            _id: img.uploadedBy?._id,
+            name: img.uploadedBy?.name,
+          },
+          uploadedAt: img.uploadedAt,
+          _id: img._id,
+        }));
 
         socket.emit("document-loaded", {
           content: document.content,
@@ -128,7 +165,8 @@ export const initializeSocket = (io) => {
           updatedAt: document.updatedAt,
           isOwner: isOwner,
           ownerId: ownerId,
-          userRole: userRole, // Send correct role to client
+          userRole: userRole,
+          images: images,
         });
 
         const users = getUniqueUsers(documentId);
@@ -220,6 +258,79 @@ export const initializeSocket = (io) => {
       }
     });
 
+    socket.on("image-upload", async ({ documentId, imageData }) => {
+      try {
+        if (!socket.isOwner) {
+          socket.emit("error", { message: "Only owner can upload images" });
+          return;
+        }
+
+        const document = await Document.findById(documentId);
+        if (!document) {
+          socket.emit("error", { message: "Document not found" });
+          return;
+        }
+
+        const user = await User.findById(socket.userId);
+
+        const newImage = {
+          url: imageData.url,
+          name: imageData.name,
+          uploadedBy: socket.userId,
+          uploadedAt: new Date(),
+        };
+
+        document.images.push(newImage);
+        await document.save();
+
+        const savedImage = document.images[document.images.length - 1];
+        const imageWithUser = {
+          url: savedImage.url,
+          name: savedImage.name,
+          uploadedBy: {
+            _id: user._id,
+            name: user.name,
+          },
+          uploadedAt: savedImage.uploadedAt,
+          _id: savedImage._id,
+        };
+
+        io.to(documentId).emit("image-added", imageWithUser);
+
+        logger.success(`Image added to document ${documentId}`);
+      } catch (error) {
+        logger.error("Image upload error:", error);
+        socket.emit("error", { message: "Failed to upload image" });
+      }
+    });
+
+    socket.on("image-remove", async ({ documentId, imageId }) => {
+      try {
+        if (!socket.isOwner) {
+          socket.emit("error", { message: "Only owner can remove images" });
+          return;
+        }
+
+        const document = await Document.findById(documentId);
+        if (!document) {
+          socket.emit("error", { message: "Document not found" });
+          return;
+        }
+
+        document.images = document.images.filter(
+          (img) => img._id.toString() !== imageId
+        );
+        await document.save();
+
+        io.to(documentId).emit("image-removed", { imageId });
+
+        logger.success(`Image removed from document ${documentId}`);
+      } catch (error) {
+        logger.error("Image removal error:", error);
+        socket.emit("error", { message: "Failed to remove image" });
+      }
+    });
+
     socket.on("leave-document", (documentId) => {
       logger.info(
         `User ${socket.userName} manually leaving document ${documentId}`
@@ -231,6 +342,17 @@ export const initializeSocket = (io) => {
       logger.info(
         `User ${socket.userName} disconnected: ${socket.id}, Reason: ${reason}`
       );
+
+      // Remove from waiting list if disconnected while waiting
+      if (socket.waitingForDocument) {
+        const docId = socket.waitingForDocument;
+        if (waitingUsers.has(docId)) {
+          waitingUsers.get(docId).delete(socket.id);
+          if (waitingUsers.get(docId).size === 0) {
+            waitingUsers.delete(docId);
+          }
+        }
+      }
 
       if (socket.documentId) {
         const wasOwner = socket.isOwner;
@@ -276,10 +398,6 @@ export const initializeSocket = (io) => {
           isTyping,
         });
       }
-    });
-
-    socket.on("image-uploaded", ({ documentId, imageData }) => {
-      socket.to(documentId).emit("new-image", imageData);
     });
 
     socket.on("heartbeat", () => {
