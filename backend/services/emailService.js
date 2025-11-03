@@ -2,7 +2,6 @@ import nodemailer from "nodemailer";
 import logger from "../utils/logger.js";
 
 const createTransporter = () => {
-  // Validate environment variables
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     logger.error(
       "Email configuration missing: EMAIL_USER or EMAIL_PASSWORD not set"
@@ -23,8 +22,7 @@ const createTransporter = () => {
       tls: {
         rejectUnauthorized: false,
       },
-      // Add timeout settings for production
-      connectionTimeout: 10000, // 10 seconds
+      connectionTimeout: 10000, 
       greetingTimeout: 10000,
       socketTimeout: 10000,
     });
@@ -45,7 +43,6 @@ export const sendShareInvitation = async (
   permission
 ) => {
   try {
-    // Validate inputs
     if (
       !ownerEmail ||
       !ownerName ||
@@ -202,7 +199,6 @@ Questions? Contact ${ownerEmail}
   } catch (error) {
     logger.error("❌ Email sending error:", error);
 
-    // Detailed error logging
     if (error.code === "EAUTH") {
       logger.error("Authentication failed. Please check:");
       logger.error("1. EMAIL_USER is correct");
