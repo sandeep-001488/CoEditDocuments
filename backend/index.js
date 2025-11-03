@@ -17,7 +17,7 @@ import aiRoutes from "./routes/ai.js";
 // Connect to database
 connectDB();
 
-// Initialize Gemini AI - ADD THIS LINE
+// Initialize Gemini AI - ADD THIS LINE 
 initGemini();
 console.log("✅ Gemini AI initialized");
 

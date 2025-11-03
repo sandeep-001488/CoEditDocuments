@@ -27,7 +27,15 @@ import {
   InputRightElement,
   FormControl,
   FormLabel,
-  Select,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Radio,
+  RadioGroup,
+  Stack,
+  Divider,
 } from "@chakra-ui/react";
 import {
   FiMoreVertical,
@@ -36,15 +44,20 @@ import {
   FiFileText,
   FiCopy,
   FiMail,
+  FiLink,
+  FiEye,
+  FiEdit,
+  FiUsers,
 } from "react-icons/fi";
 import api from "@/services/api";
 
 const DocumentCard = ({ document, onDelete, onClick }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [shareEmail, setShareEmail] = useState("");
-  const [shareRole, setShareRole] = useState("viewer");
+  const [emailPermission, setEmailPermission] = useState("viewer");
+  const [linkPermission, setLinkPermission] = useState("viewer");
   const [shareLink, setShareLink] = useState("");
-  const [loadingShare, setLoadingShare] = useState(false);
+  const [loadingEmail, setLoadingEmail] = useState(false);
   const [loadingLink, setLoadingLink] = useState(false);
   const toast = useToast();
 
@@ -84,19 +97,23 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
 
   const handleShareClick = (e) => {
     e.stopPropagation();
+    setShareLink("");
     onOpen();
   };
 
   const handleGenerateShareLink = async () => {
     setLoadingLink(true);
     try {
-      const response = await api.post(`/documents/${document._id}/share-link`);
+      const response = await api.post(`/documents/${document._id}/share-link`, {
+        permission: linkPermission,
+      });
       if (response.data.success) {
         setShareLink(response.data.shareLink);
         toast({
           title: "Share link generated",
+          description: `Link with ${linkPermission} permission created`,
           status: "success",
-          duration: 2000,
+          duration: 3000,
         });
       }
     } catch (error) {
@@ -121,7 +138,7 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
     });
   };
 
-  const handleShareWithEmail = async () => {
+  const handleSendEmailInvitation = async () => {
     if (!shareEmail) {
       toast({
         title: "Email required",
@@ -132,17 +149,31 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
       return;
     }
 
-    setLoadingShare(true);
-    try {
-      const response = await api.post(`/documents/${document._id}/share`, {
-        email: shareEmail,
-        role: shareRole,
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(shareEmail)) {
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address",
+        status: "error",
+        duration: 3000,
       });
+      return;
+    }
+
+    setLoadingEmail(true);
+    try {
+      const response = await api.post(
+        `/documents/${document._id}/send-invitation`,
+        {
+          email: shareEmail,
+          permission: emailPermission,
+        }
+      );
 
       if (response.data.success) {
         toast({
-          title: "Document shared",
-          description: `Shared with ${shareEmail} as ${shareRole}`,
+          title: "Invitation sent",
+          description: `Email sent to ${shareEmail} with ${emailPermission} access`,
           status: "success",
           duration: 3000,
         });
@@ -152,12 +183,13 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
       toast({
         title: "Error",
         description:
-          error.response?.data?.message || "Failed to share document",
+          error.response?.data?.message ||
+          "Failed to send invitation. Check if user exists.",
         status: "error",
-        duration: 3000,
+        duration: 5000,
       });
     } finally {
-      setLoadingShare(false);
+      setLoadingEmail(false);
     }
   };
 
@@ -165,16 +197,17 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
     <>
       <Box
         bg="white"
-        borderRadius="xl"
-        borderWidth="1px"
-        borderColor="gray.200"
+        borderRadius="2xl"
+        borderWidth="2px"
+        borderColor="purple.200"
         p={6}
         cursor="pointer"
         onClick={onClick}
         _hover={{
-          transform: "translateY(-4px)",
-          boxShadow: "xl",
-          bg: "gray.50",
+          transform: "translateY(-6px)",
+          boxShadow: "2xl",
+          borderColor: "purple.400",
+          bgGradient: "linear(to-br, white, purple.50)",
         }}
         transition="all 0.3s"
         position="relative"
@@ -182,8 +215,14 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
         <VStack align="stretch" spacing={3}>
           <HStack justify="space-between">
             <HStack>
-              <FiFileText size={20} color="#805AD5" />
-              <Heading size="md" noOfLines={1}>
+              <Box
+                p={2}
+                borderRadius="lg"
+                bgGradient="linear(to-br, purple.500, blue.500)"
+              >
+                <FiFileText size={20} color="white" />
+              </Box>
+              <Heading size="md" noOfLines={1} color="gray.800">
                 {document.title || "Untitled Document"}
               </Heading>
             </HStack>
@@ -193,6 +232,7 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
                 icon={<FiMoreVertical />}
                 variant="ghost"
                 size="sm"
+                colorScheme="purple"
                 onClick={(e) => e.stopPropagation()}
               />
               <MenuList>
@@ -218,119 +258,321 @@ const DocumentCard = ({ document, onDelete, onClick }) => {
           </Text>
 
           <HStack justify="space-between" pt={2}>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="gray.500" fontWeight="medium">
               Updated {formatDate(document.updatedAt)}
             </Text>
             {document.collaborators?.length > 0 && (
-              <Badge colorScheme="purple" fontSize="xs">
-                Shared
+              <Badge
+                colorScheme="purple"
+                fontSize="xs"
+                borderRadius="full"
+                px={2}
+              >
+                <HStack spacing={1}>
+                  <FiUsers />
+                  <Text>Shared</Text>
+                </HStack>
               </Badge>
             )}
           </HStack>
         </VStack>
       </Box>
 
-      {/* Share Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      {/* Share Modal - same as before but with colorful styling */}
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Share Document</ModalHeader>
-          <ModalCloseButton />
+          <ModalHeader
+            bgGradient="linear(to-r, purple.500, blue.500)"
+            color="white"
+            borderTopRadius="md"
+          >
+            Share "{document.title || "Untitled"}"
+          </ModalHeader>
+          <ModalCloseButton color="white" />
           <ModalBody pb={6}>
-            <VStack spacing={6} align="stretch">
-              {/* Share with Email */}
-              <Box>
-                <Heading size="sm" mb={3}>
-                  Share with specific people
-                </Heading>
-                <VStack spacing={3}>
-                  <FormControl>
-                    <FormLabel>Email Address</FormLabel>
-                    <Input
-                      placeholder="colleague@email.com"
-                      value={shareEmail}
-                      onChange={(e) => setShareEmail(e.target.value)}
-                      type="email"
-                    />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel>Permission</FormLabel>
-                    <Select
-                      value={shareRole}
-                      onChange={(e) => setShareRole(e.target.value)}
+            <Tabs colorScheme="purple">
+              <TabList>
+                <Tab>
+                  <HStack>
+                    <FiLink />
+                    <Text>Share Link</Text>
+                  </HStack>
+                </Tab>
+                <Tab>
+                  <HStack>
+                    <FiMail />
+                    <Text>Email Invitation</Text>
+                  </HStack>
+                </Tab>
+              </TabList>
+
+              <TabPanels>
+                {/* Share Link Tab */}
+                <TabPanel>
+                  <VStack spacing={6} align="stretch">
+                    <Box>
+                      <Heading size="sm" mb={3} color="purple.700">
+                        Generate a shareable link
+                      </Heading>
+                      <Text fontSize="sm" color="gray.600" mb={4}>
+                        Anyone with this link will be able to access the
+                        document
+                      </Text>
+
+                      <FormControl mb={4}>
+                        <FormLabel color="purple.600">
+                          Link Permission
+                        </FormLabel>
+                        <RadioGroup
+                          value={linkPermission}
+                          onChange={setLinkPermission}
+                        >
+                          <Stack direction="column" spacing={3}>
+                            <Radio value="viewer" colorScheme="purple">
+                              <HStack>
+                                <FiEye />
+                                <VStack align="start" spacing={0}>
+                                  <Text fontWeight="semibold">View Only</Text>
+                                  <Text fontSize="xs" color="gray.600">
+                                    Recipients can only view the document
+                                  </Text>
+                                </VStack>
+                              </HStack>
+                            </Radio>
+                            <Radio value="editor" colorScheme="purple">
+                              <HStack>
+                                <FiEdit />
+                                <VStack align="start" spacing={0}>
+                                  <Text fontWeight="semibold">Can Edit</Text>
+                                  <Text fontSize="xs" color="gray.600">
+                                    Recipients can view and edit the document
+                                  </Text>
+                                </VStack>
+                              </HStack>
+                            </Radio>
+                          </Stack>
+                        </RadioGroup>
+                      </FormControl>
+
+                      {!shareLink ? (
+                        <Button
+                          leftIcon={<FiLink />}
+                          colorScheme="purple"
+                          width="full"
+                          onClick={handleGenerateShareLink}
+                          isLoading={loadingLink}
+                          bgGradient="linear(to-r, purple.500, blue.500)"
+                          _hover={{
+                            bgGradient: "linear(to-r, purple.600, blue.600)",
+                          }}
+                        >
+                          Generate{" "}
+                          {linkPermission === "editor"
+                            ? "Editable"
+                            : "View-Only"}{" "}
+                          Link
+                        </Button>
+                      ) : (
+                        <VStack spacing={3}>
+                          <InputGroup>
+                            <Input value={shareLink} isReadOnly />
+                            <InputRightElement width="4.5rem">
+                              <Button
+                                h="1.75rem"
+                                size="sm"
+                                colorScheme="purple"
+                                onClick={handleCopyLink}
+                              >
+                                <FiCopy />
+                              </Button>
+                            </InputRightElement>
+                          </InputGroup>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            colorScheme="purple"
+                            width="full"
+                            onClick={() => setShareLink("")}
+                          >
+                            Generate New Link
+                          </Button>
+                        </VStack>
+                      )}
+                    </Box>
+
+                    {shareLink && (
+                      <Box
+                        p={3}
+                        bgGradient="linear(to-r, purple.50, blue.50)"
+                        borderRadius="md"
+                        borderLeft="4px solid"
+                        borderColor="purple.500"
+                      >
+                        <Text
+                          fontSize="sm"
+                          fontWeight="semibold"
+                          mb={1}
+                          color="purple.700"
+                        >
+                          Link Permission:{" "}
+                          {linkPermission === "editor"
+                            ? "Can Edit"
+                            : "View Only"}
+                        </Text>
+                        <Text fontSize="xs" color="gray.600">
+                          {linkPermission === "editor"
+                            ? "Anyone with this link can edit the document"
+                            : "Anyone with this link can only view the document"}
+                        </Text>
+                      </Box>
+                    )}
+                  </VStack>
+                </TabPanel>
+
+                {/* Email Invitation Tab */}
+                <TabPanel>
+                  <VStack spacing={6} align="stretch">
+                    <Box>
+                      <Heading size="sm" mb={3} color="purple.700">
+                        Invite via email
+                      </Heading>
+                      <Text fontSize="sm" color="gray.600" mb={4}>
+                        Send an invitation email with access link to a specific
+                        user
+                      </Text>
+
+                      <VStack spacing={4}>
+                        <FormControl isRequired>
+                          <FormLabel color="purple.600">
+                            Recipient Email
+                          </FormLabel>
+                          <Input
+                            type="email"
+                            placeholder="colleague@example.com"
+                            value={shareEmail}
+                            onChange={(e) => setShareEmail(e.target.value)}
+                          />
+                          <Text fontSize="xs" color="gray.500" mt={1}>
+                            User must have a registered account
+                          </Text>
+                        </FormControl>
+
+                        <FormControl>
+                          <FormLabel color="purple.600">
+                            Access Permission
+                          </FormLabel>
+                          <RadioGroup
+                            value={emailPermission}
+                            onChange={setEmailPermission}
+                          >
+                            <Stack direction="column" spacing={3}>
+                              <Radio value="viewer" colorScheme="purple">
+                                <HStack>
+                                  <FiEye />
+                                  <VStack align="start" spacing={0}>
+                                    <Text fontWeight="semibold">View Only</Text>
+                                    <Text fontSize="xs" color="gray.600">
+                                      Can only read the document
+                                    </Text>
+                                  </VStack>
+                                </HStack>
+                              </Radio>
+                              <Radio value="editor" colorScheme="purple">
+                                <HStack>
+                                  <FiEdit />
+                                  <VStack align="start" spacing={0}>
+                                    <Text fontWeight="semibold">Can Edit</Text>
+                                    <Text fontSize="xs" color="gray.600">
+                                      Can view and edit the document
+                                    </Text>
+                                  </VStack>
+                                </HStack>
+                              </Radio>
+                            </Stack>
+                          </RadioGroup>
+                        </FormControl>
+
+                        <Button
+                          leftIcon={<FiMail />}
+                          colorScheme="purple"
+                          width="full"
+                          onClick={handleSendEmailInvitation}
+                          isLoading={loadingEmail}
+                          bgGradient="linear(to-r, purple.500, blue.500)"
+                          _hover={{
+                            bgGradient: "linear(to-r, purple.600, blue.600)",
+                          }}
+                        >
+                          Send Invitation Email
+                        </Button>
+                      </VStack>
+                    </Box>
+
+                    <Box
+                      p={3}
+                      bgGradient="linear(to-r, blue.50, purple.50)"
+                      borderRadius="md"
+                      borderLeft="4px solid"
+                      borderColor="blue.500"
                     >
-                      <option value="viewer">Viewer (Read only)</option>
-                      <option value="editor">Editor (Can edit)</option>
-                    </Select>
-                  </FormControl>
-                  <Button
-                    leftIcon={<FiMail />}
-                    colorScheme="purple"
-                    width="full"
-                    onClick={handleShareWithEmail}
-                    isLoading={loadingShare}
-                  >
-                    Send Invitation
-                  </Button>
+                      <Text
+                        fontSize="sm"
+                        fontWeight="semibold"
+                        mb={1}
+                        color="blue.700"
+                      >
+                        📧 Email will be sent from your account
+                      </Text>
+                      <Text fontSize="xs" color="gray.600">
+                        The recipient will receive an email with the document
+                        link and access instructions
+                      </Text>
+                    </Box>
+                  </VStack>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+
+            <Divider my={6} />
+
+            {/* Existing Collaborators */}
+            {document.collaborators?.length > 0 && (
+              <Box>
+                <Heading size="sm" mb={3} color="purple.700">
+                  People with access ({document.collaborators.length})
+                </Heading>
+                <VStack align="stretch" spacing={2}>
+                  {document.collaborators.map((collab) => (
+                    <HStack
+                      key={collab.user._id}
+                      justify="space-between"
+                      p={3}
+                      bgGradient="linear(to-r, purple.50, blue.50)"
+                      borderRadius="md"
+                    >
+                      <VStack align="start" spacing={0}>
+                        <Text fontSize="sm" fontWeight="semibold">
+                          {collab.user.name}
+                        </Text>
+                        <Text fontSize="xs" color="gray.600">
+                          {collab.user.email}
+                        </Text>
+                      </VStack>
+                      <Badge
+                        colorScheme={
+                          collab.role === "editor" ? "green" : "blue"
+                        }
+                        borderRadius="full"
+                        px={3}
+                      >
+                        {collab.role === "editor" ? "Can Edit" : "View Only"}
+                      </Badge>
+                    </HStack>
+                  ))}
                 </VStack>
               </Box>
-
-              {/* Generate Share Link */}
-              <Box>
-                <Heading size="sm" mb={3}>
-                  Or share with a link
-                </Heading>
-                {!shareLink ? (
-                  <Button
-                    leftIcon={<FiShare2 />}
-                    colorScheme="blue"
-                    variant="outline"
-                    width="full"
-                    onClick={handleGenerateShareLink}
-                    isLoading={loadingLink}
-                  >
-                    Generate Share Link
-                  </Button>
-                ) : (
-                  <InputGroup>
-                    <Input value={shareLink} isReadOnly />
-                    <InputRightElement width="4.5rem">
-                      <Button
-                        h="1.75rem"
-                        size="sm"
-                        onClick={handleCopyLink}
-                        leftIcon={<FiCopy />}
-                      >
-                        Copy
-                      </Button>
-                    </InputRightElement>
-                  </InputGroup>
-                )}
-              </Box>
-
-              {/* Existing Collaborators */}
-              {document.collaborators?.length > 0 && (
-                <Box>
-                  <Heading size="sm" mb={3}>
-                    People with access
-                  </Heading>
-                  <VStack align="stretch" spacing={2}>
-                    {document.collaborators.map((collab) => (
-                      <HStack
-                        key={collab.user._id}
-                        justify="space-between"
-                        p={2}
-                        bg="gray.50"
-                        borderRadius="md"
-                      >
-                        <Text fontSize="sm">{collab.user.email}</Text>
-                        <Badge colorScheme="purple">{collab.role}</Badge>
-                      </HStack>
-                    ))}
-                  </VStack>
-                </Box>
-              )}
-            </VStack>
+            )}
           </ModalBody>
         </ModalContent>
       </Modal>

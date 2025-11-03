@@ -23,13 +23,13 @@ import {
 } from "react-icons/fi";
 import api from "@/services/api";
 
-const AIAssistant = ({ content, onApply }) => {
+const AIAssistant = ({ content, onApply, isReadOnly = false }) => {
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeFeature, setActiveFeature] = useState("");
   const toast = useToast();
-   const bgColor = useColorModeValue("white", "gray.800");
-   const borderColor = useColorModeValue("gray.200", "gray.700");
+  const bgColor = useColorModeValue("white", "gray.800");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
 
   const handleAIRequest = async (endpoint, feature) => {
     if (!content || content.length < 10) {
@@ -69,6 +69,25 @@ const AIAssistant = ({ content, onApply }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApplyResult = () => {
+    if (isReadOnly) {
+      toast({
+        title: "Read-only mode",
+        description: "You cannot apply changes in view-only mode",
+        status: "warning",
+        duration: 3000,
+      });
+      return;
+    }
+
+    onApply(result);
+    toast({
+      title: "Applied to document",
+      status: "success",
+      duration: 2000,
+    });
   };
 
   const aiFeatures = [
@@ -135,6 +154,12 @@ const AIAssistant = ({ content, onApply }) => {
           Select an AI feature to improve your writing
         </Text>
 
+        {isReadOnly && (
+          <Badge colorScheme="orange" p={2} borderRadius="md">
+            View-only mode - AI results cannot be applied
+          </Badge>
+        )}
+
         <Divider />
 
         {aiFeatures.map((feature) => (
@@ -181,16 +206,10 @@ const AIAssistant = ({ content, onApply }) => {
                 colorScheme="purple"
                 mt={2}
                 width="full"
-                onClick={() => {
-                  onApply(result);
-                  toast({
-                    title: "Applied to document",
-                    status: "success",
-                    duration: 2000,
-                  });
-                }}
+                onClick={handleApplyResult}
+                isDisabled={isReadOnly}
               >
-                Apply to Document
+                {isReadOnly ? "Cannot Apply (Read-Only)" : "Apply to Document"}
               </Button>
             </Box>
           </>
@@ -200,4 +219,4 @@ const AIAssistant = ({ content, onApply }) => {
   );
 };
 
-export default AIAssistant;
+export default AIAssistant; 

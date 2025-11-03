@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
   Container,
@@ -30,20 +30,27 @@ import {
   MenuList,
   MenuItem,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, HamburgerIcon } from "@chakra-ui/icons";
-import { FiSave, FiUsers, FiZap } from "react-icons/fi";
+import { ArrowBackIcon } from "@chakra-ui/icons";
+import { FiSave, FiUsers, FiZap, FiLink, FiImage } from "react-icons/fi";
 import Editor from "@/components/Editor";
 import AIAssistant from "@/components/AIAssistant";
+import ImageGallery from "@/components/ImageGallery";
 import api from "@/services/api";
 import { initSocket, disconnectSocket } from "@/services/socket";
 
 export default function EditorPage() {
-  const bgColor = "gray.50";
+  const bgGradient = "linear(to-br, purple.50, blue.50, pink.50)";
   const navBg = "white";
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen: isGalleryOpen,
+    onOpen: onGalleryOpen,
+    onClose: onGalleryClose,
+  } = useDisclosure();
 
   const [document, setDocument] = useState(null);
   const [title, setTitle] = useState("");
@@ -55,10 +62,14 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [joinedViaLink, setJoinedViaLink] = useState(false);
+  const [images, setImages] = useState([]);
   const autoSaveTimer = useRef(null);
   const typingTimer = useRef(null);
+  const titleSaveTimer = useRef(null);
 
-  // Auto-save functionality
   useEffect(() => {
     if (!content && !title) return;
     if (!socket || !isConnected) return;
@@ -83,6 +94,14 @@ export default function EditorPage() {
     if (!token) {
       router.push("/auth/login");
       return;
+    }
+
+    // Check if joined via link
+    const linkToken = searchParams.get("token");
+    const permission = searchParams.get("permission");
+    if (linkToken) {
+      setJoinedViaLink(true);
+      setUserRole(permission || "viewer");
     }
 
     fetchDocument();
@@ -110,6 +129,15 @@ export default function EditorPage() {
       setContent(data.content || "");
       setTitle(data.title || "");
       setLastSaved(new Date(data.updatedAt));
+      setIsOwner(data.isOwner);
+
+      // Set role from socket or from URL params
+      if (linkToken && permission) {
+        setUserRole(permission);
+      } else {
+        setUserRole(data.userRole);
+      }
+
       setLoading(false);
     });
 
@@ -167,28 +195,24 @@ export default function EditorPage() {
       }
     });
 
-    socketInstance.on("cursor-update", (data) => {
-      console.log("🖱️ Cursor update:", data);
-    });
-
-    socketInstance.on("error", (error) => {
-      console.error("❌ Socket error:", error);
+    socketInstance.on("owner-disconnected", (data) => {
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Owner disconnected",
+        description: data.message,
         status: "error",
         duration: 5000,
+        isClosable: false,
       });
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 2000);
     });
 
     return () => {
       disconnectSocket(params.id);
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
-      if (typingTimer.current) {
-        clearTimeout(typingTimer.current);
-      }
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      if (titleSaveTimer.current) clearTimeout(titleSaveTimer.current);
     };
   }, [params.id]);
 
@@ -213,7 +237,7 @@ export default function EditorPage() {
   };
 
   const handleAutoSave = async () => {
-    if (socket && !saving && isConnected) {
+    if (socket && !saving && isConnected && isOwner) {
       console.log("💾 Auto-saving document...");
       socket.emit("save-document", {
         documentId: params.id,
@@ -224,6 +248,16 @@ export default function EditorPage() {
   };
 
   const handleSave = async () => {
+    if (!isOwner) {
+      toast({
+        title: "Permission denied",
+        description: "Only the document owner can save",
+        status: "warning",
+        duration: 3000,
+      });
+      return;
+    }
+
     if (!socket || !isConnected) {
       toast({
         title: "Not connected",
@@ -256,6 +290,21 @@ export default function EditorPage() {
   const handleTitleChange = (newTitle) => {
     setTitle(newTitle);
     emitTypingIndicator();
+
+    // Auto-save title with debounce
+    if (titleSaveTimer.current) {
+      clearTimeout(titleSaveTimer.current);
+    }
+
+    titleSaveTimer.current = setTimeout(() => {
+      if (socket && isConnected && isOwner) {
+        socket.emit("save-document", {
+          documentId: params.id,
+          content,
+          title: newTitle,
+        });
+      }
+    }, 2000);
   };
 
   const handleContentChange = (newContent) => {
@@ -268,6 +317,14 @@ export default function EditorPage() {
         content: newContent,
       });
     }
+  };
+
+  const handleImageUpload = (imageData) => {
+    setImages((prev) => [...prev, imageData]);
+  };
+
+  const handleRemoveImage = (index) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const emitTypingIndicator = () => {
@@ -316,9 +373,21 @@ export default function EditorPage() {
     return fullName ? fullName.split(" ")[0] : "";
   };
 
+  const getRoleLabel = (role) => {
+    if (role === "owner") return "OWNER";
+    if (role === "editor") return "EDITOR";
+    return "VIEWER";
+  };
+
+  const getRoleBadgeColor = (role) => {
+    if (role === "owner") return "purple";
+    if (role === "editor") return "green";
+    return "blue";
+  };
+
   if (loading) {
     return (
-      <Center minH="100vh" bg={bgColor}>
+      <Center minH="100vh" bgGradient={bgGradient}>
         <VStack spacing={4}>
           <Spinner size="xl" color="purple.500" thickness="4px" />
           <Text color="gray.600">Loading document...</Text>
@@ -327,20 +396,24 @@ export default function EditorPage() {
     );
   }
 
+  const isReadOnly = userRole === "viewer";
+
   return (
-    <Box minH="100vh" bg={bgColor} position="relative">
-      {/* Top Navigation - Responsive */}
+    <Box minH="100vh" bgGradient={bgGradient} position="relative">
+      {/* Top Navigation */}
       <Box
         bg={navBg}
-        boxShadow="sm"
+        boxShadow="md"
         py={3}
         position="sticky"
         top={0}
         zIndex={10}
+        borderBottom="2px solid"
+        borderColor="purple.200"
       >
         <Container maxW="container.xl" px={{ base: 3, md: 4, lg: 6 }}>
           <VStack spacing={2} align="stretch">
-            {/* Desktop Header (lg and up) */}
+            {/* Desktop Header */}
             <HStack
               justify="space-between"
               display={{ base: "none", lg: "flex" }}
@@ -352,23 +425,41 @@ export default function EditorPage() {
                   variant="ghost"
                   aria-label="Back to dashboard"
                   size="sm"
+                  colorScheme="purple"
                 />
                 <Input
                   value={title}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   variant="unstyled"
                   fontSize="lg"
-                  fontWeight="semibold"
+                  fontWeight="bold"
                   placeholder="Untitled Document"
                   maxW="400px"
+                  isReadOnly={!isOwner}
                 />
                 <HStack spacing={2}>
                   <Badge
                     colorScheme={isConnected ? "green" : "red"}
                     fontSize="xs"
+                    px={2}
                   >
-                    {isConnected ? "●" : "○"}
+                    {isConnected ? "● Connected" : "○ Disconnected"}
                   </Badge>
+                  <Badge
+                    colorScheme={getRoleBadgeColor(userRole)}
+                    fontSize="xs"
+                    px={2}
+                  >
+                    {getRoleLabel(userRole)}
+                  </Badge>
+                  {joinedViaLink && (
+                    <Badge colorScheme="orange" fontSize="xs" px={2}>
+                      <HStack spacing={1}>
+                        <FiLink size={10} />
+                        <Text>Via Link</Text>
+                      </HStack>
+                    </Badge>
+                  )}
                   <Text fontSize="xs" color="gray.500">
                     {formatLastSaved()}
                   </Text>
@@ -378,7 +469,12 @@ export default function EditorPage() {
               <HStack spacing={3}>
                 {activeUsers.length > 0 && (
                   <Menu>
-                    <MenuButton as={Button} variant="ghost" size="sm">
+                    <MenuButton
+                      as={Button}
+                      variant="ghost"
+                      size="sm"
+                      colorScheme="purple"
+                    >
                       <HStack spacing={2}>
                         <FiUsers />
                         <Text fontSize="sm">{activeUsers.length}</Text>
@@ -405,17 +501,23 @@ export default function EditorPage() {
                       </Text>
                       {activeUsers.map((user) => (
                         <MenuItem key={user.socketId}>
-                          <HStack>
+                          <HStack spacing={3} w="full">
                             <Avatar
                               size="sm"
                               name={user.name}
                               src={user.avatar}
                             />
-                            <VStack align="start" spacing={0}>
+                            <VStack align="start" spacing={0} flex={1}>
                               <Text fontSize="sm">{user.name}</Text>
-                              <Text fontSize="xs" color="gray.500">
-                                {getFirstName(user.name)}
-                              </Text>
+                              <HStack spacing={2}>
+                                <Badge
+                                  size="xs"
+                                  colorScheme={getRoleBadgeColor(user.role)}
+                                  fontSize="2xs"
+                                >
+                                  {getRoleLabel(user.role)}
+                                </Badge>
+                              </HStack>
                             </VStack>
                           </HStack>
                         </MenuItem>
@@ -424,21 +526,34 @@ export default function EditorPage() {
                   </Menu>
                 )}
 
-                <Button
-                  leftIcon={<FiSave />}
-                  colorScheme="purple"
-                  onClick={handleSave}
-                  isLoading={saving}
-                  loadingText="Saving"
-                  size="sm"
-                  isDisabled={!isConnected}
-                >
-                  Save
-                </Button>
+                <Tooltip label="View images">
+                  <IconButton
+                    icon={<FiImage />}
+                    onClick={onGalleryOpen}
+                    variant="ghost"
+                    size="sm"
+                    colorScheme="purple"
+                    aria-label="Image gallery"
+                  />
+                </Tooltip>
+
+                {isOwner && (
+                  <Button
+                    leftIcon={<FiSave />}
+                    colorScheme="purple"
+                    onClick={handleSave}
+                    isLoading={saving}
+                    loadingText="Saving"
+                    size="sm"
+                    isDisabled={!isConnected}
+                  >
+                    Save
+                  </Button>
+                )}
               </HStack>
             </HStack>
 
-            {/* Tablet/Mobile Header (base to lg) */}
+            {/* Mobile/Tablet Header */}
             <HStack
               justify="space-between"
               display={{ base: "flex", lg: "none" }}
@@ -450,33 +565,30 @@ export default function EditorPage() {
                   variant="ghost"
                   size="sm"
                   aria-label="Back"
+                  colorScheme="purple"
                 />
                 <Input
                   value={title}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   variant="unstyled"
                   fontSize={{ base: "md", md: "lg" }}
-                  fontWeight="semibold"
+                  fontWeight="bold"
                   placeholder="Untitled"
                   flex={1}
+                  isReadOnly={!isOwner}
                 />
               </HStack>
 
               <HStack spacing={2}>
                 <Badge
                   colorScheme={isConnected ? "green" : "red"}
-                  fontSize="xs"
-                  display={{ base: "none", md: "block" }}
-                >
-                  {isConnected ? "Connected" : "Disconnected"}
-                </Badge>
-
-                <Badge
-                  colorScheme={isConnected ? "green" : "red"}
-                  fontSize="xs"
-                  display={{ base: "block", md: "none" }}
+                  fontSize="2xs"
                 >
                   {isConnected ? "●" : "○"}
+                </Badge>
+
+                <Badge colorScheme={getRoleBadgeColor(userRole)} fontSize="2xs">
+                  {getRoleLabel(userRole)}
                 </Badge>
 
                 {activeUsers.length > 0 && (
@@ -486,6 +598,7 @@ export default function EditorPage() {
                       icon={<FiUsers />}
                       size="sm"
                       variant="ghost"
+                      colorScheme="purple"
                       position="relative"
                     >
                       <Badge
@@ -513,13 +626,24 @@ export default function EditorPage() {
                       </Text>
                       {activeUsers.map((user) => (
                         <MenuItem key={user.socketId}>
-                          <HStack>
+                          <HStack spacing={2} w="full">
                             <Avatar
                               size="sm"
                               name={user.name}
                               src={user.avatar}
                             />
-                            <Text fontSize="sm">{getFirstName(user.name)}</Text>
+                            <VStack align="start" spacing={0} flex={1}>
+                              <Text fontSize="sm">
+                                {getFirstName(user.name)}
+                              </Text>
+                              <Badge
+                                size="xs"
+                                colorScheme={getRoleBadgeColor(user.role)}
+                                fontSize="2xs"
+                              >
+                                {getRoleLabel(user.role)}
+                              </Badge>
+                            </VStack>
                           </HStack>
                         </MenuItem>
                       ))}
@@ -528,20 +652,37 @@ export default function EditorPage() {
                 )}
 
                 <IconButton
-                  icon={<FiSave />}
-                  onClick={handleSave}
-                  isLoading={saving}
+                  icon={<FiImage />}
+                  onClick={onGalleryOpen}
                   size="sm"
                   variant="ghost"
-                  isDisabled={!isConnected}
-                  aria-label="Save"
+                  colorScheme="purple"
+                  aria-label="Images"
                 />
+
+                {isOwner && (
+                  <IconButton
+                    icon={<FiSave />}
+                    onClick={handleSave}
+                    isLoading={saving}
+                    size="sm"
+                    variant="ghost"
+                    colorScheme="purple"
+                    isDisabled={!isConnected}
+                    aria-label="Save"
+                  />
+                )}
               </HStack>
             </HStack>
 
             {/* Typing Indicator */}
             {typingUsers.size > 0 && (
-              <Text fontSize="xs" color="gray.500" pl={{ base: 10, md: 12 }}>
+              <Text
+                fontSize="xs"
+                color="purple.600"
+                fontStyle="italic"
+                pl={{ base: 10, md: 12 }}
+              >
                 {getTypingText()}
               </Text>
             )}
@@ -555,6 +696,14 @@ export default function EditorPage() {
               <Text fontSize="xs" color="gray.500">
                 {formatLastSaved()}
               </Text>
+              {joinedViaLink && (
+                <Badge colorScheme="orange" fontSize="2xs">
+                  <HStack spacing={1}>
+                    <FiLink size={8} />
+                    <Text>Link</Text>
+                  </HStack>
+                </Badge>
+              )}
             </HStack>
           </VStack>
         </Container>
@@ -573,22 +722,25 @@ export default function EditorPage() {
               onChange={handleContentChange}
               socket={socket}
               documentId={params.id}
+              isReadOnly={isReadOnly}
+              onImageUpload={handleImageUpload}
+              isOwner={isOwner}
             />
           </Box>
 
-          {/* Desktop AI Assistant - Only on very large screens */}
+          {/* Desktop AI Assistant */}
           <Box
             w="350px"
             display={{ base: "none", xl: "block" }}
             position="sticky"
-            top="100px"
+            top="120px"
           >
             <AIAssistant content={content} onApply={handleContentChange} />
           </Box>
         </HStack>
       </Container>
 
-      {/* Floating AI Assistant Button - Shows on all screens except xl */}
+      {/* Floating AI Assistant Button */}
       <Box
         position="fixed"
         bottom={{ base: 4, md: 6 }}
@@ -603,20 +755,20 @@ export default function EditorPage() {
             colorScheme="purple"
             size={{ base: "lg", md: "md" }}
             borderRadius="full"
-            boxShadow="lg"
+            boxShadow="xl"
             aria-label="AI Assistant"
             _hover={{
               transform: "scale(1.1)",
-              boxShadow: "xl",
+              boxShadow: "2xl",
             }}
             transition="all 0.2s"
-            w={{ base: "56px", md: "48px" }}
-            h={{ base: "56px", md: "48px" }}
+            w={{ base: "60px", md: "56px" }}
+            h={{ base: "60px", md: "56px" }}
           />
         </Tooltip>
       </Box>
 
-      {/* Mobile/Tablet AI Assistant Drawer */}
+      {/* AI Assistant Drawer */}
       <Drawer
         isOpen={isOpen}
         placement="right"
@@ -626,13 +778,13 @@ export default function EditorPage() {
         <DrawerOverlay />
         <DrawerContent>
           <DrawerCloseButton />
-          <DrawerHeader borderBottomWidth="1px">
+          <DrawerHeader borderBottomWidth="1px" bg="purple.50">
             <HStack>
               <FiZap color="#805AD5" />
               <Text>AI Writing Assistant</Text>
             </HStack>
           </DrawerHeader>
-          <DrawerBody p={4}>
+          <DrawerBody p={4} bg="purple.50">
             <AIAssistant
               content={content}
               onApply={(newContent) => {
@@ -643,6 +795,15 @@ export default function EditorPage() {
           </DrawerBody>
         </DrawerContent>
       </Drawer>
+
+      {/* Image Gallery */}
+      <ImageGallery
+        isOpen={isGalleryOpen}
+        onClose={onGalleryClose}
+        images={images}
+        isOwner={isOwner}
+        onRemoveImage={handleRemoveImage}
+      />
     </Box>
   );
 }
