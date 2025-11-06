@@ -414,6 +414,8 @@ export const initializeSocket = (io) => {
   });
 };
 
+
+
 const handleUserLeave = (socket, documentId, io, isDisconnect) => {
   if (!activeUsers.has(documentId)) return;
 
