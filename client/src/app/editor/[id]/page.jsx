@@ -126,7 +126,7 @@ export default function EditorPage() {
     });
 
     socketInstance.on("document-loaded", (data) => {
-      console.log("📄 Document loaded:", data);
+      // console.log("📄 Document loaded:", data);
       setContent(data.content || "");
       setTitle(data.title || "");
       setLastSaved(new Date(data.updatedAt));
@@ -196,7 +196,7 @@ export default function EditorPage() {
     });
 
     socketInstance.on("image-added", (imageData) => {
-      console.log("🖼️ New image added:", imageData);
+      // console.log("🖼️ New image added:", imageData);
       setImages((prev) => [...prev, imageData]);
 
       toast({
@@ -208,7 +208,7 @@ export default function EditorPage() {
     });
 
     socketInstance.on("image-removed", ({ imageId }) => {
-      console.log("🗑️ Image removed:", imageId);
+      // console.log("🗑️ Image removed:", imageId);
       setImages((prev) => prev.filter((img) => img._id !== imageId));
 
       toast({
@@ -220,12 +220,12 @@ export default function EditorPage() {
     });
 
     socketInstance.on("text-change", (data) => {
-      console.log("✏️ Remote text change received");
+      // console.log("✏️ Remote text change received");
       setContent(data.content || "");
     });
 
     socketInstance.on("users-update", (users) => {
-      console.log("👥 Active users updated:", users);
+      // console.log("👥 Active users updated:", users);
       setActiveUsers(users);
 
       if (users.length > activeUsers.length) {
@@ -320,7 +320,7 @@ export default function EditorPage() {
 
   const handleAutoSave = async () => {
     if (socket && !saving && isConnected && isOwner) {
-      console.log("💾 Auto-saving document...");
+      // console.log("💾 Auto-saving document...");
       socket.emit("save-document", {
         documentId: params.id,
         content,
@@ -391,7 +391,6 @@ export default function EditorPage() {
   const handleContentChange = (newContent) => {
     setContent(newContent);
     emitTypingIndicator();
-
     if (socket && isConnected) {
       socket.emit("text-change", {
         documentId: params.id,

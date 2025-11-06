@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
       router.push("/dashboard");
     } catch (error) {
       console.error("Login failed", error);
-      throw error; // Re-throw to be caught by the form
+      throw error; 
     }
   };
 

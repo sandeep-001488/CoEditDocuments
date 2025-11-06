@@ -1,6 +1,6 @@
 "use client";
-
 import { useEffect, useState } from "react";
+
 import {
   Box,
   Container,
@@ -147,7 +147,7 @@ export default function DashboardPage() {
         borderBottom="3px solid"
         borderColor="purple.200"
       >
-        <Container maxW="container.xl" px={{ base: 4, md: 6 }}>
+      <Container maxW="container.xl" px={{ base: 4, md: 6 }}> 
           <HStack
             justify="space-between"
             flexWrap={{ base: "wrap", md: "nowrap" }}
